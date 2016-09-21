@@ -1,3 +1,49 @@
 language: scala
+cache:
+  directories:
+    - $HOME/.ivy2
+    - $HOME/spark
+    - $HOME/.cache/pip
+    - $HOME/.pip-cache
+    - $HOME/.sbt/launchers
 scala:
    - 2.10.4
+sudo: false
+addons:
+  apt:
+    packages:
+      - axel
+before_install:
+  - export PATH=$HOME/.local/bin:$PATH
+  - pip install --user codecov coverage unittest2
+install:
+  # Download spark 2.0.0
+  - "[ -f spark] || mkdir spark && cd spark && axel http://d3kbcqa49mib13.cloudfront.net/spark-2.0.0-bin-hadoop2.7.tgz && cd .."
+  - "tar -xf ./spark/spark-2.0.0-bin-hadoop2.7.tgz"
+  - "export SPARK_HOME=`pwd`/spark-2.0.0-bin-hadoop2.7"
+  # Install Python deps.
+  # The conda installation steps here are based on http://conda.pydata.org/docs/travis.html
+  - wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+  - deps='pip requests nose sphinx pep8 coverage'
+  - conda create -p $HOME/py --yes $deps "python=2.7"
+  - export PATH=$HOME/py/bin:$PATH
+  - pip install --upgrade unittest2 codecov
+script:
+  - ./sbt/sbt scalastyle
+  - SPARK_CONF_DIR=./log4j/ ./sbt/sbt clean coverage test
+  - cp ./log4j/log4j.properties $SPARK_HOME/conf/
+  - ./python/run-tests
+  - "pep8 --ignore=E402 ./python"
+after_success:
+  - codecov
+notifications:
+  email:
+    recipients:
+      - holden@pigscanfly.ca
